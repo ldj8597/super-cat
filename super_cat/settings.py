@@ -6,7 +6,7 @@ TILE = 32
 FPS = 60
 
 # Vertical physics
-JUMP_SPEED = 540  # px/s
+JUMP_SPEED = 640  # px/s
 GRAVITY = 1800
 TERMINAL_V = 1400
 

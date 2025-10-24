@@ -3,7 +3,8 @@
 import pygame
 
 from core.camera import Camera
-from core.utils import rects_from_level
+from core.tilemap import TileMap
+from core.utils import rects_from_level, asset_path
 from entities.player import Player
 from entities.enemy import Enemy
 from level_data import LEVEL
@@ -27,10 +28,21 @@ class Game:
         self.clock = pygame.Clock()
         self.font = pygame.font.SysFont(None, 18)
 
-        # Build world from level
-        self.tiles = rects_from_level(LEVEL)
-        world_w = len(LEVEL[0]) * TILE
-        world_h = len(LEVEL) * TILE
+        # Try to load CSV tilemap; if missing, fall back to LEVEL string map
+        csv_map = asset_path("maps", "level1.csv")
+        tileset_img = asset_path("images", "tiles.png")
+
+        if csv_map.exists():
+            self.tilemap = TileMap(csv_map, tileset_img, tile_w=TILE, tile_h=TILE)
+            world_w, world_h = self.tilemap.world_size
+            # Build solids (treat all non-negative indices as solid by default)
+            self.tiles = self.tilemap.solid_rects()
+        else:
+            # Fallback: use built-in LEVEL string map
+            self.tilemap = None
+            self.tiles = rects_from_level(LEVEL)
+            world_w = len(LEVEL[0]) * TILE
+            world_h = len(LEVEL) * TILE
 
         # Entities
         self.player = Player((TILE * 3, TILE * 2))
@@ -87,9 +99,11 @@ class Game:
             # --- Render ---
             self.screen.fill(COLOR_BG)
 
-            # Draw tiles
-            for t in self.tiles:
-                pygame.draw.rect(self.screen, COLOR_TILE, self.camera.apply(t))
+            if self.tilemap:
+                self.tilemap.draw(self.screen, self.camera)
+            else:
+                for t in self.tiles:
+                    pygame.draw.rect(self.screen, COLOR_TILE, self.camera.apply(t))
 
             # Draw entities
             self.player.draw(self.screen, self.camera)
