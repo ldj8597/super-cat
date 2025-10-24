@@ -1,5 +1,6 @@
 # settings.py
 
+# Screen/physics/speed constants
 WIDTH, HEIGHT = 960, 540
 TILE = 32
 FPS = 60
@@ -9,8 +10,13 @@ JUMP_SPEED = 540  # px/s
 GRAVITY = 1800
 TERMINAL_V = 1400
 
+# Colors
 COLOR_BG = (20, 20, 20)
 COLOR_TILE = (90, 90, 95)
 COLOR_PLAYER = (40, 160, 255)
 COLOR_ENEMY = (220, 60, 60)
 COLOR_TEXT = (230, 230, 230)
+
+# Animation
+ANIM_DEFAULT_FPS = 10
+USE_PLACEHOLDER_GFX = False

@@ -2,24 +2,125 @@
 
 import pygame
 
+
 from .base import Entity
-from settings import PLAYER_SPEED, JUMP_SPEED, COLOR_PLAYER
+from core.animation import (
+    Animator,
+    slice_grid,
+    Animation,
+    frames_from_row,
+    scale_frames,
+)
+from core.camera import Camera
+from core.utils import asset_path
+from settings import PLAYER_SPEED, JUMP_SPEED, COLOR_PLAYER, USE_PLACEHOLDER_GFX
 
 
 class Player(Entity):
     def __init__(self, pos: tuple[float, float]):
-        super().__init__(pos, (24, 43), COLOR_PLAYER)
+        super().__init__(pos, (24, 32), COLOR_PLAYER)
+        self.facing = 1  # 1=right, -1=left
+        # Load animations (fallback to placeholder if image missing)
+        self._load_animations()
 
+    # --- Input ---
     def handle_input(self, dt: float):
+        """Modify self.vel.x with arrow key input, and self.vel.y with space-bar input"""
+
         keys = pygame.key.get_pressed()
         move = 0
         if keys[pygame.K_LEFT] or keys[pygame.K_a]:
             move -= 1
         if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
             move += 1
-
+        # Horizontal speed
         self.vel.x = move * PLAYER_SPEED
+        if move:
+            self.facing = 1 if move > 0 else -1
 
+        # Jump only when grounded
         if (keys[pygame.K_SPACE] or keys[pygame.K_UP]) and self.on_ground:
             self.vel.y = -JUMP_SPEED
             self.on_ground = False
+
+    # --- Animation/state ---
+    def _state_from_motion(self) -> str:
+        # basic 4-state logic: idle/run/jump/fall
+        if self.on_ground:
+            return "run" if abs(self.vel.x) > 1e-3 else "idle"
+        return "jump" if self.vel.y < 0 else "fall"
+
+    def update_animation(self, dt: float):
+        state = self._state_from_motion()
+        self.anim.set_state(state)
+        self.anim.update(dt)
+
+    # --- Drawing ---
+    def draw(self, surf: pygame.Surface, camera: Camera):
+        frame = self.anim.frame()
+        if frame is None:
+            # Fallback to colored rect if no frames
+            pygame.draw.rect(surf, self.color, camera.apply(self.rect))
+        else:
+            img = frame
+            if self.facing < 0:
+                img = pygame.transform.flip(img, True, False)
+            dst = camera.apply(self.rect)
+            # Align sprite's bottom-center to collision box's bottom-center
+            ir = img.get_rect(midbottom=dst.midbottom)
+            surf.blit(img, ir)
+
+    # --- Assets ---
+    def _load_animations(self):
+        """
+        Load spritesheet and build animations; fallback to colored rectangles.
+        """
+        sheet_path = asset_path("images", "player.png")
+        clips = {}
+
+        if not USE_PLACEHOLDER_GFX and sheet_path.exists():
+            sheet = pygame.image.load(sheet_path).convert_alpha()
+
+            # --- Configure sheet layout here ---
+            FRAME_W, FRAME_H = 32, 32  # actual sprite frame size in the image
+            PER_ROW = sheet.width // FRAME_W
+
+            frames = slice_grid(sheet, FRAME_W, FRAME_H, margin=0, spacing=0)
+
+            idle = frames_from_row(frames, row=0, columns=range(8), per_row=PER_ROW)
+            run = frames_from_row(frames, row=1, columns=range(8), per_row=PER_ROW)
+            jump = frames_from_row(frames, row=2, columns=range(4), per_row=PER_ROW)
+            fall = frames_from_row(frames, row=2, columns=range(4, 8), per_row=PER_ROW)
+
+            idle = scale_frames(idle, self.rect.size, pixel_art=True)
+            run = scale_frames(run, self.rect.size, pixel_art=True)
+            jump = scale_frames(jump, self.rect.size, pixel_art=True)
+            fall = scale_frames(fall, self.rect.size, pixel_art=True)
+
+            clips = {
+                "idle": Animation(idle, fps=6, loop=True),
+                "run": Animation(run, fps=12, loop=True),
+                "jump": Animation(jump, fps=1, loop=False),
+                "fall": Animation(fall, fps=1, loop=False),
+            }
+        else:
+            # Placeholder frames (procedural surfaces)
+            def box(color):
+                surf = pygame.Surface((24, 32), pygame.SRCALPHA)
+                surf.fill((0, 0, 0, 0))
+                pygame.draw.rect(surf, color, pygame.Rect(0, 0, 24, 32), 2)
+                pygame.draw.rect(surf, color, pygame.Rect(6, 8, 12, 16), 0)
+                return surf
+
+            idle = [box((90, 190, 255)), box((70, 170, 255))]
+            run = [box((120, 210, 255)), box((80, 160, 240)), box((120, 210, 25))]
+            jump = [box((180, 230, 255))]
+            fall = [box((140, 200, 255))]
+            clips = {
+                "idle": Animation(idle, fps=2, loop=True),
+                "run": Animation(run, fps=8, loop=True),
+                "jump": Animation(jump, fps=1, loop=False),
+                "fall": Animation(fall, fps=1, loop=False),
+            }
+        # Build animator
+        self.anim = Animator(clips, initial="idle")

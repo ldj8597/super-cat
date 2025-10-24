@@ -1,7 +1,5 @@
 # enemy.py
 
-import pygame
-
 from .base import Entity
 from settings import COLOR_ENEMY
 

@@ -34,7 +34,7 @@ class Game:
 
         # Entities
         self.player = Player((TILE * 3, TILE * 2))
-        self.enemies = [Enemy((TILE * 3, TILE * 6), patrol_range=96)]
+        self.enemies = [Enemy((TILE * 7, TILE * 6), patrol_range=96)]
 
         # Camera
         self.camera = Camera(world_w, world_h)
@@ -77,6 +77,9 @@ class Game:
 
             # --- Camera ---
             self.camera.follow(self.player.rect)
+
+            # --- Animation update ---
+            self.player.update_animation(dt)
 
             # --- Render ---
             self.screen.fill(COLOR_BG)

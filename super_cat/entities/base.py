@@ -35,6 +35,7 @@ class Entity:
         self.vel.y = min(self.vel.y + GRAVITY * dt, TERMINAL_V)
         self.rect.y += self.vel.y * dt
         hits = [t for t in tiles if self.rect.colliderect(t)]
+        self.on_ground = False
         for t in hits:
             if self.vel.y > 0:
                 self.rect.bottom = t.top
