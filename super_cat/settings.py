@@ -10,6 +10,10 @@ JUMP_SPEED = 540  # px/s
 GRAVITY = 1800
 TERMINAL_V = 1400
 
+# Input feel
+COYOTE_TIME = 0.20  # seconds you can still jump after leaving ground
+JUMP_BUFFER_TIME = 0.24  # seconds jump input is buffered before landing
+
 # Colors
 COLOR_BG = (20, 20, 20)
 COLOR_TILE = (90, 90, 95)

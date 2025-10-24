@@ -50,7 +50,7 @@ class Game:
                 if event.type == pygame.QUIT:
                     self.running = False
 
-            # --- Input & AI ---
+            # --- Input & AI (pre-physics) ---
             self.player.handle_input(dt)
             for en in self.enemies:
                 en.update_ai()
@@ -59,6 +59,9 @@ class Game:
             self.player.move_and_collide(dt, self.tiles)
             for en in self.enemies:
                 en.move_and_collide(dt, self.tiles)
+
+            # --- Post-physics (coyote + jump buffer resolution) ---
+            self.player.after_physics(dt)
 
             # --- Player-Enemy interaction ---
             for en in self.enemies[:]:

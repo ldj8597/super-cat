@@ -13,35 +13,71 @@ from core.animation import (
 )
 from core.camera import Camera
 from core.utils import asset_path
-from settings import PLAYER_SPEED, JUMP_SPEED, COLOR_PLAYER, USE_PLACEHOLDER_GFX
+from settings import (
+    PLAYER_SPEED,
+    JUMP_SPEED,
+    COLOR_PLAYER,
+    USE_PLACEHOLDER_GFX,
+    JUMP_BUFFER_TIME,
+    COYOTE_TIME,
+)
 
 
 class Player(Entity):
     def __init__(self, pos: tuple[float, float]):
         super().__init__(pos, (24, 32), COLOR_PLAYER)
         self.facing = 1  # 1=right, -1=left
+
+        # Timers for input feel
+        self.coyote_timer = 0.0  # time left to allow jump after leaving ground
+        self.jump_buffer_timer = 0.0  # time left to consume buffered jump input
+        self._prev_jump_down = False  # for detecting edge press
+
         # Load animations (fallback to placeholder if image missing)
         self._load_animations()
 
-    # --- Input ---
+    # --- Input (pre-physics) ---
     def handle_input(self, dt: float):
-        """Modify self.vel.x with arrow key input, and self.vel.y with space-bar input"""
-
+        """Process horizontal input and record jump intent (buffer)."""
         keys = pygame.key.get_pressed()
+        # Horizontal
         move = 0
         if keys[pygame.K_LEFT] or keys[pygame.K_a]:
             move -= 1
         if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
             move += 1
-        # Horizontal speed
         self.vel.x = move * PLAYER_SPEED
         if move:
             self.facing = 1 if move > 0 else -1
 
-        # Jump only when grounded
-        if (keys[pygame.K_SPACE] or keys[pygame.K_UP]) and self.on_ground:
+        # Record edge press for jump buffer (Space/Up)
+        jump_down = keys[pygame.K_SPACE] or keys[pygame.K_UP]
+        if jump_down and not self._prev_jump_down:
+            # on the frame jump is pressed, (re)fill buffer
+            self.jump_buffer_timer = JUMP_BUFFER_TIME
+        self._prev_jump_down = jump_down
+
+        # Decrease existing buffer slightly here; final handling in after_physics
+        if self.jump_buffer_timer > 0:
+            self.jump_buffer_timer = max(0.0, self.jump_buffer_timer - dt)
+
+    # --- Post-physics (after collisions) ---
+    def after_physics(self, dt: float):
+        """Handle coyote time and buffered jump after collision resolution."""
+        # Refresh coyote when grounded; tick down when airborne
+        if self.on_ground:
+            self.coyote_timer = COYOTE_TIME
+        else:
+            if self.coyote_timer > 0:
+                self.coyote_timer = max(0.0, self.coyote_timer - dt)
+
+        # If we have a buffered jump and are allowed to jump now, consume it
+        can_jump_now = self.on_ground or self.coyote_timer > 0.0
+        if self.jump_buffer_timer > 0.0 and can_jump_now:
             self.vel.y = -JUMP_SPEED
             self.on_ground = False
+            self.coyote_timer = 0.0
+            self.jump_buffer_timer = 0.0
 
     # --- Animation/state ---
     def _state_from_motion(self) -> str:
