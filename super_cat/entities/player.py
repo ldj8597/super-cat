@@ -14,7 +14,13 @@ from core.animation import (
 from core.camera import Camera
 from core.utils import asset_path
 from settings import (
-    PLAYER_SPEED,
+    MAX_SPEED,
+    ACCEL_GROUND,
+    ACCEL_AIR,
+    DECEL_GROUND,
+    DECEL_AIR,
+    FRICTION_GROUND,
+    FRICTION_AIR,
     JUMP_SPEED,
     COLOR_PLAYER,
     USE_PLACEHOLDER_GFX,
@@ -33,22 +39,66 @@ class Player(Entity):
         self.jump_buffer_timer = 0.0  # time left to consume buffered jump input
         self._prev_jump_down = False  # for detecting edge press
 
+        # Cached input state
+        self.input_dir = 0  # -1, 0, +1
+
         # Load animations (fallback to placeholder if image missing)
         self._load_animations()
 
+    # --- Helpers ---
+    @staticmethod
+    def _sign(x: float) -> int:
+        return (x > 0) - (x < 0)
+
+    @staticmethod
+    def _approach(current: float, target: float, delta: float) -> float:
+        """Move current toward target by at most delta (per call)."""
+        if current < target:
+            return min(current + delta, target)
+        else:
+            return max(current - delta, target)
+
     # --- Input (pre-physics) ---
     def handle_input(self, dt: float):
-        """Process horizontal input and record jump intent (buffer)."""
+        """Process horizontal input and record jump intent (buffer).
+        Acceleration-based horizontal movement.
+        """
         keys = pygame.key.get_pressed()
-        # Horizontal
-        move = 0
+
+        # Horizontal desired direction(-1, 0, 1)
+        self.input_dir = 0
         if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-            move -= 1
+            self.input_dir -= 1
         if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-            move += 1
-        self.vel.x = move * PLAYER_SPEED
-        if move:
-            self.facing = 1 if move > 0 else -1
+            self.input_dir += 1
+        if self.input_dir:
+            self.facing = 1 if self.input_dir > 0 else -1
+
+        # Compute target speed and choose accel/decles
+        target_vx = self.input_dir * MAX_SPEED
+        vx = self.vel.x
+        same_dir = self._sign(vx) == self._sign(target_vx) or target_vx == 0
+
+        if self.input_dir != 0:
+            # Accelerate toward target speed (different on ground vs air)
+            accel = ACCEL_GROUND if self.on_ground else ACCEL_AIR
+            # if changing direction
+            if not same_dir and abs(vx) > 1e-5:
+                decel = DECEL_GROUND if self.on_ground else DECEL_AIR
+                step = decel * dt
+                vx = self._approach(vx, 0.0, step)
+            # then accelerate toward target
+            step = accel * dt
+            vx = self._approach(vx, target_vx, step)
+        else:
+            # No input: apply friction toward 0
+            friction = FRICTION_GROUND if self.on_ground else FRICTION_AIR
+            vx = self._approach(vx, 0.0, dt * friction)
+
+        # Clamp to max speed and assign
+        if abs(vx) > MAX_SPEED:
+            vx = MAX_SPEED * self._sign(vx)
+        self.vel.x = vx
 
         # Record edge press for jump buffer (Space/Up)
         jump_down = keys[pygame.K_SPACE] or keys[pygame.K_UP]

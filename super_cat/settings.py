@@ -5,10 +5,21 @@ WIDTH, HEIGHT = 960, 540
 TILE = 32
 FPS = 60
 
-PLAYER_SPEED = 240  # px/s
+# Vertical physics
 JUMP_SPEED = 540  # px/s
 GRAVITY = 1800
 TERMINAL_V = 1400
+
+# Horizontal movement (acceleration-based)
+# Horizontal movement (acceleration-based)
+MAX_SPEED = 260  # px/s (horizontal top speed)
+ACCEL_GROUND = 2800  # px/s^2 when holding left/right on ground
+DECEL_GROUND = 3200  # px/s^2 when changing direction on ground
+ACCEL_AIR = 900  # px/s^2 when holding left/right in air
+DECEL_AIR = 1600  # px/s^2 when changing direction in air
+FRICTION_GROUND = 2000  # px/s^2 when no input on ground
+FRICTION_AIR = 300  # px/s^2 when no input in air (tiny drift damp)
+
 
 # Input feel
 COYOTE_TIME = 0.20  # seconds you can still jump after leaving ground
