@@ -1,0 +1,12 @@
+{
+  "default": { "solid": false, "friction": 1.0 },
+  "tiles": {
+    "0": { "solid": true, "friction": 1.0 },
+    "1": { "solid": true, "friction": 0.9 },
+    "2": { "solid": true, "friction": 1.1 },
+    "4": { "solid": false },
+    "5": { "solid": true, "friction": 0.6 },
+    "6": { "solid": true },
+    "7": { "solid": false }
+  }
+}

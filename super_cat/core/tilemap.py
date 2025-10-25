@@ -10,6 +10,7 @@ from pathlib import Path
 import pygame
 
 from .camera import Camera
+from .tileprops import TilesetProps
 from settings import TILE
 
 type Grid = list[list[int]]
@@ -68,12 +69,14 @@ class TileMap:
         tileset_path: Path | None = None,
         tile_w: int = TILE,
         tile_h: int = TILE,
+        props: TilesetProps | None = None,
     ):
         self.grid = load_csv_grid(csv_path)
         self.h = len(self.grid)
         self.w = len(self.grid[0]) if self.h else 0
         self.tile_w = tile_w
         self.tile_h = tile_h
+        self.props = props or TilesetProps()
         self.tileset_frames: list[pygame.Surface] | None = None
         if tileset_path and tileset_path.exists():
             image = pygame.image.load(tileset_path).convert_alpha()
@@ -84,9 +87,12 @@ class TileMap:
         return self.w * self.tile_w, self.h * self.tile_h
 
     def solid_rects(self, solid_indices: set[int] | None = None) -> list[pygame.Rect]:
-        # By default, treat all non-negative indices as solid
+        # if solid_indices not given, derive from props.solid_indices;
+        # default to non-negative if props empty
         if solid_indices is None:
-            solid_indices = {i for row in self.grid for i in row if i >= 0}
+            solid_indices = self.props.solid_indices or {
+                i for row in self.grid for i in row if i >= 0
+            }
         return build_solid_rects(self.grid, solid_indices, self.tile_w)
 
     def draw(self, target: pygame.Surface, camera: Camera, empty_value: int = -1):

@@ -4,6 +4,7 @@ import pygame
 
 from core.camera import Camera
 from core.tilemap import TileMap
+from core.tileprops import load_tileset_props
 from core.utils import rects_from_level, asset_path
 from entities.player import Player
 from entities.enemy import Enemy
@@ -31,9 +32,13 @@ class Game:
         # Try to load CSV tilemap; if missing, fall back to LEVEL string map
         csv_map = asset_path("maps", "level1.csv")
         tileset_img = asset_path("images", "tiles.png")
+        tileset_json = asset_path("maps", "level1.tiles.json")
 
         if csv_map.exists():
-            self.tilemap = TileMap(csv_map, tileset_img, tile_w=TILE, tile_h=TILE)
+            props = load_tileset_props(tileset_json)
+            self.tilemap = TileMap(
+                csv_map, tileset_img, tile_w=TILE, tile_h=TILE, props=props
+            )
             world_w, world_h = self.tilemap.world_size
             # Build solids (treat all non-negative indices as solid by default)
             self.tiles = self.tilemap.solid_rects()
