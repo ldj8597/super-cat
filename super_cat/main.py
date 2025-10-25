@@ -105,7 +105,6 @@ class Game:
                 for t in self.tiles:
                     pygame.draw.rect(self.screen, COLOR_TILE, self.camera.apply(t))
 
-            # Draw entities
             self.player.draw(self.screen, self.camera)
             # self.player.debug_draw(self.screen, self.camera)
             for en in self.enemies:

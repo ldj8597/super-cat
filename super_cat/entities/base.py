@@ -19,7 +19,9 @@ class Entity:
         self.on_ground = False
         self.color = color
 
-    def move_and_collide(self, dt: float, tiles: list[pygame.FRect]):
+    def move_and_collide(
+        self, dt: float, tiles: list[pygame.FRect] | list[pygame.Rect]
+    ):
         # --- Horizontal movement and collision ---
         # Apply velocity with dt using float precision
         self.rect.x += self.vel.x * dt
