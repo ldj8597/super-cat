@@ -24,6 +24,10 @@ class TilesetProps:
     def solid_indices(self) -> set[int]:
         return {idx for idx, props in self.tiles.items() if props.solid}
 
+    @property
+    def one_way_indices(self) -> set[int]:
+        return {idx for idx, props in self.tiles.items() if props.one_way}
+
     def get(self, idx: int) -> TileProps:
         return self.tiles.get(idx, TileProps())
 

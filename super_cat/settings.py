@@ -35,3 +35,7 @@ COLOR_TEXT = (230, 230, 230)
 # Animation
 ANIM_DEFAULT_FPS = 10
 USE_PLACEHOLDER_GFX = False
+
+# One-way platforms
+DROP_THROUGH_TIME = 0.15  # seconds to ignore one-way when pressing Down+Jump
+DROP_SUPPRESS_JUMP = 0.08  # grace period to suppress buffered jump after drop-through

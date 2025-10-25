@@ -26,14 +26,14 @@ def load_csv_grid(csv_file: Path) -> Grid:
     return grid
 
 
-def build_solid_rects(
-    grid: Grid, solid_indices: set[int], tile_size: int = TILE
+def build_rects_of_indices(
+    grid: Grid, indices: set[int], tile_size: int = TILE
 ) -> list[pygame.Rect]:
     """Create axis-aligned solid rects from grid indices."""
     rects: list[pygame.Rect] = []
     for y, row in enumerate(grid):
         for x, idx in enumerate(row):
-            if idx in solid_indices:
+            if idx in indices:
                 rects.append(
                     pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size)
                 )
@@ -93,7 +93,13 @@ class TileMap:
             solid_indices = self.props.solid_indices or {
                 i for row in self.grid for i in row if i >= 0
             }
-        return build_solid_rects(self.grid, solid_indices, self.tile_w)
+        return build_rects_of_indices(self.grid, solid_indices, self.tile_w)
+
+    def one_way_rects(self) -> list[pygame.Rect]:
+        one_way_indices = self.props.one_way_indices
+        if not one_way_indices:
+            return []
+        return build_rects_of_indices(self.grid, one_way_indices, self.tile_w)
 
     def draw(self, target: pygame.Surface, camera: Camera, empty_value: int = -1):
         # Draw cell-by-cell. For larger maps batch/diff drawing would be better.

@@ -41,17 +41,20 @@ class Game:
             )
             world_w, world_h = self.tilemap.world_size
             # Build solids (treat all non-negative indices as solid by default)
-            self.tiles = self.tilemap.solid_rects()
+            self.solid_tiles = self.tilemap.solid_rects()
+            self.one_way_tiles = self.tilemap.one_way_rects()
         else:
             # Fallback: use built-in LEVEL string map
             self.tilemap = None
-            self.tiles = rects_from_level(LEVEL)
+            self.solid_tiles = rects_from_level(LEVEL)
+            self.one_way_tiles = []
             world_w = len(LEVEL[0]) * TILE
             world_h = len(LEVEL) * TILE
 
         # Entities
         self.player = Player((TILE * 3, TILE * 2))
-        self.enemies = [Enemy((TILE * 7, TILE * 6), patrol_range=96)]
+        self.enemies = []
+        # self.enemies = [Enemy((TILE * 14, TILE * 8), patrol_range=96)]
 
         # Camera
         self.camera = Camera(world_w, world_h)
@@ -73,9 +76,9 @@ class Game:
                 en.update_ai()
 
             # --- Physics & Collision ---
-            self.player.move_and_collide(dt, self.tiles)
+            self.player.move_and_collide(dt, self.solid_tiles, self.one_way_tiles)
             for en in self.enemies:
-                en.move_and_collide(dt, self.tiles)
+                en.move_and_collide(dt, self.solid_tiles, self.one_way_tiles)
 
             # --- Post-physics (coyote + jump buffer resolution) ---
             self.player.after_physics(dt)
@@ -107,7 +110,7 @@ class Game:
             if self.tilemap:
                 self.tilemap.draw(self.screen, self.camera)
             else:
-                for t in self.tiles:
+                for t in self.solid_tiles:
                     pygame.draw.rect(self.screen, COLOR_TILE, self.camera.apply(t))
 
             self.player.draw(self.screen, self.camera)

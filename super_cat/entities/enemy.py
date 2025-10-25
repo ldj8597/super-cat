@@ -17,6 +17,6 @@ class Enemy(Entity):
         right = self.base_x + self.patrol_range
         if self.rect.x <= left:
             self.direction = 1
-        elif self.rect.x >= right:
+        elif self.rect.x >= right or self.vel.x == 0:
             self.direction = -1
         self.vel.x = self.direction * self.speed

@@ -26,6 +26,7 @@ from settings import (
     USE_PLACEHOLDER_GFX,
     JUMP_BUFFER_TIME,
     COYOTE_TIME,
+    DROP_THROUGH_TIME,
 )
 
 
@@ -38,6 +39,8 @@ class Player(Entity):
         self.coyote_timer = 0.0  # time left to allow jump after leaving ground
         self.jump_buffer_timer = 0.0  # time left to consume buffered jump input
         self._prev_jump_down = False  # for detecting edge press
+        self.drop_intent_timer = 0.0
+        self.suppress_jump_timer = 0.0  # suppress buffered jump after drop-through
 
         # Cached input state
         self.input_dir = 0  # -1, 0, +1
@@ -58,14 +61,29 @@ class Player(Entity):
         else:
             return max(current - delta, target)
 
-    # --- Input (pre-physics) ---
-    def handle_input(self, dt: float):
-        """Process horizontal input and record jump intent (buffer).
-        Acceleration-based horizontal movement.
-        """
-        keys = pygame.key.get_pressed()
+    def _clamp_to_max_speed(self, vx: float) -> float:
+        return vx if abs(vx) <= MAX_SPEED else MAX_SPEED * self._sign(vx)
 
-        # Horizontal desired direction(-1, 0, 1)
+    def _next_velocity_x(self, vx: float, dt: float, input_dir: int, on_ground: bool):
+        target_vx = input_dir * MAX_SPEED
+        same_dir = self._sign(vx) == self._sign(target_vx) or target_vx == 0
+        need_decel = not same_dir and abs(vx) > 1e-5
+
+        if input_dir != 0:
+            accel = ACCEL_GROUND if on_ground else ACCEL_AIR
+            if need_decel:
+                decel = DECEL_GROUND if on_ground else DECEL_AIR
+                step = decel * dt
+                vx = self._approach(vx, 0.0, step)
+            step = accel * dt
+            vx = self._approach(vx, target_vx, step)
+        else:
+            # No input: apply friction toward 0
+            friction = FRICTION_GROUND if on_ground else FRICTION_AIR
+            vx = self._approach(vx, 0.0, dt * friction)
+        return vx
+
+    def _set_direction(self, keys: pygame.key.ScancodeWrapper):
         self.input_dir = 0
         if keys[pygame.K_LEFT] or keys[pygame.K_a]:
             self.input_dir -= 1
@@ -74,52 +92,73 @@ class Player(Entity):
         if self.input_dir:
             self.facing = 1 if self.input_dir > 0 else -1
 
-        # Compute target speed and choose accel/decles
-        target_vx = self.input_dir * MAX_SPEED
-        vx = self.vel.x
-        same_dir = self._sign(vx) == self._sign(target_vx) or target_vx == 0
+    def _record_drop_intent(self):
+        self.drop_intent_timer = DROP_THROUGH_TIME
+        self.suppress_jump_timer = max(
+            self.suppress_jump_timer, DROP_THROUGH_TIME * 0.5
+        )
+        self.jump_buffer_timer = 0.0
+        self.coyote_timer = 0.0
 
-        if self.input_dir != 0:
-            # Accelerate toward target speed (different on ground vs air)
-            accel = ACCEL_GROUND if self.on_ground else ACCEL_AIR
-            # if changing direction
-            if not same_dir and abs(vx) > 1e-5:
-                decel = DECEL_GROUND if self.on_ground else DECEL_AIR
-                step = decel * dt
-                vx = self._approach(vx, 0.0, step)
-            # then accelerate toward target
-            step = accel * dt
-            vx = self._approach(vx, target_vx, step)
-        else:
-            # No input: apply friction toward 0
-            friction = FRICTION_GROUND if self.on_ground else FRICTION_AIR
-            vx = self._approach(vx, 0.0, dt * friction)
+    def _record_jump_intent(self):
+        self.jump_buffer_timer = JUMP_BUFFER_TIME
 
-        # Clamp to max speed and assign
-        if abs(vx) > MAX_SPEED:
-            vx = MAX_SPEED * self._sign(vx)
-        self.vel.x = vx
-
-        # Record edge press for jump buffer (Space/Up)
-        jump_down = keys[pygame.K_SPACE] or keys[pygame.K_UP]
-        if jump_down and not self._prev_jump_down:
-            # on the frame jump is pressed, (re)fill buffer
-            self.jump_buffer_timer = JUMP_BUFFER_TIME
-        self._prev_jump_down = jump_down
-
-        # Decrease existing buffer slightly here; final handling in after_physics
+    def _tick_timers(self, dt: float):
         if self.jump_buffer_timer > 0:
             self.jump_buffer_timer = max(0.0, self.jump_buffer_timer - dt)
+        if self.suppress_jump_timer > 0:
+            self.suppress_jump_timer = max(0.0, self.suppress_jump_timer - dt)
+        if self.drop_intent_timer > 0:
+            self.drop_intent_timer = max(0.0, self.drop_intent_timer - dt)
+
+    # --- Input (pre-physics) ---
+    def handle_input(self, dt: float):
+        """Process input; acceleration-based horizontal; jump buffer; drop-through"""
+        keys = pygame.key.get_pressed()
+
+        # --- Horizontal input handling ---
+        self._set_direction(keys)
+        vx = self._next_velocity_x(self.vel.x, dt, self.input_dir, self.on_ground)
+        self.vel.x = self._clamp_to_max_speed(vx)
+
+        # --- Jump / drop-through input handling ---
+        jump_down = keys[pygame.K_SPACE] or keys[pygame.K_UP]
+        down_held = keys[pygame.K_DOWN] or keys[pygame.K_s]
+
+        if down_held and jump_down and not self._prev_jump_down:
+            self._record_drop_intent()
+        elif jump_down and not self._prev_jump_down:
+            self._record_jump_intent()
+        self._prev_jump_down = jump_down
+
+        # Tick timers
+        self._tick_timers(dt)
 
     # --- Post-physics (after collisions) ---
     def after_physics(self, dt: float):
-        """Handle coyote time and buffered jump after collision resolution."""
+        """Coyote + buffered jump resolution after collisions."""
         # Refresh coyote when grounded; tick down when airborne
         if self.on_ground:
             self.coyote_timer = COYOTE_TIME
         else:
             if self.coyote_timer > 0:
                 self.coyote_timer = max(0.0, self.coyote_timer - dt)
+
+        # Consume drop-through intent when grounded: start ignoring one-way collisions
+        if self.drop_intent_timer > 0.0 and self.on_ground:
+            self.ignore_one_way_timer = DROP_THROUGH_TIME
+            # Keep jump suppressed briefly so we don't immediately jump after dropping
+            self.suppress_jump_timer = max(
+                self.suppress_jump_timer, DROP_THROUGH_TIME * 0.5
+            )
+            self.drop_intent_timer = 0.0
+            # Nudge downward to cleanly leave the platform
+            if self.vel.y < 30:
+                self.vel.y = 30
+            return
+
+        if self.suppress_jump_timer > 0.0:
+            return
 
         # If we have a buffered jump and are allowed to jump now, consume it
         can_jump_now = self.on_ground or self.coyote_timer > 0.0
@@ -199,7 +238,7 @@ class Player(Entity):
                 return surf
 
             idle = [box((90, 190, 255)), box((70, 170, 255))]
-            run = [box((120, 210, 255)), box((80, 160, 240)), box((120, 210, 25))]
+            run = [box((120, 210, 255)), box((80, 160, 240)), box((120, 210, 255))]
             jump = [box((180, 230, 255))]
             fall = [box((140, 200, 255))]
             clips = {
