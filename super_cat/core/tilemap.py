@@ -2,7 +2,7 @@
 
 # CSV-based tilemap loader and renderer
 # - Map CSV values: -1 = empty, 0..N = tile index
-# - Tilset is a grid spritesheet sliced to frames
+# - Tileset is a grid spritesheet sliced to frames
 
 import csv
 from pathlib import Path
@@ -13,11 +13,11 @@ from .camera import Camera
 from .tileprops import TilesetProps
 from settings import TILE
 
-type Grid = list[list[int]]
+Grid = list[list[int]]
 
 
 def load_csv_grid(csv_file: Path) -> Grid:
-    """Load a CSV file into a 2D grid fo ints."""
+    """Load a CSV file into a 2D grid of ints."""
     grid: Grid = []
     with open(csv_file, newline="") as file:
         reader = csv.reader(file)
@@ -116,3 +116,41 @@ class TileMap:
                 else:
                     # Fallback: draw a simple tile rect
                     pygame.draw.rect(target, (110, 110, 115), dst)
+
+    def index_at_pixel(self, x: int, y: int) -> int:
+        """Get tile index at a world pixel; returns -1 if out of bounds or empty."""
+        if x < 0 or y < 0:  # negative index not allowed
+            return -1
+        col = x // self.tile_w
+        row = y // self.tile_h
+        try:
+            return self.grid[row][col]
+        except IndexError:
+            return -1
+
+    def friction_under(self, rect: pygame.FRect, empty_value: int = -1) -> float:
+        """Frictions under a rect's feet (average of overlapped tiles)"""
+        if not self.grid:
+            return 1.0
+        sample_y = int(rect.bottom) + 1
+        row = sample_y // self.tile_h
+        if row < 0 or row >= self.h:
+            return 1.0
+        left = int(rect.left)
+        right = int(rect.right) - 1
+        start_col = max(0, left // self.tile_w)
+        end_col = min(self.w - 1, right // self.tile_w)
+        indices_under = [
+            idx
+            for col in range(start_col, end_col + 1)
+            if (idx := self.grid[row][col]) != empty_value
+        ]
+        print(indices_under)
+
+        frictions = [self.props.get(idx).friction for idx in indices_under]
+        if not frictions:
+            return 1.0
+        value = sum(frictions) / len(frictions)
+
+        # print(f"friction under the players feet: {value:.2f}")
+        return value

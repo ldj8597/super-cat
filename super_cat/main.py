@@ -83,6 +83,14 @@ class Game:
             # --- Post-physics (coyote + jump buffer resolution) ---
             self.player.after_physics(dt)
 
+            # --- Update surface friction for the next frame ---
+            if self.tilemap and self.player.on_ground:
+                self.player.surface_friction = self.tilemap.friction_under(
+                    self.player.rect
+                )
+            else:
+                self.player.surface_friction = 1.0
+
             # --- Player-Enemy interaction ---
             for en in self.enemies[:]:
                 if self.player.rect.colliderect(en.rect):
@@ -124,7 +132,12 @@ class Game:
                 True,
                 COLOR_TEXT,
             )
+            # in Game.run() render section
+            dbg = self.font.render(
+                f"fric={self.player.surface_friction:.2f}", True, COLOR_TEXT
+            )
             self.screen.blit(fps_text, (8, 8))
+            self.screen.blit(dbg, (8, 24))
 
             pygame.display.flip()
 

@@ -45,6 +45,9 @@ class Player(Entity):
         # Cached input state
         self.input_dir = 0  # -1, 0, +1
 
+        # Coefficient from tiles under feet
+        self.surface_friction = 1.0
+
         # Load animations (fallback to placeholder if image missing)
         self._load_animations()
 
@@ -61,27 +64,27 @@ class Player(Entity):
         else:
             return max(current - delta, target)
 
-    def _clamp_to_max_speed(self, vx: float) -> float:
-        return vx if abs(vx) <= MAX_SPEED else MAX_SPEED * self._sign(vx)
-
     def _next_velocity_x(self, vx: float, dt: float, input_dir: int, on_ground: bool):
         target_vx = input_dir * MAX_SPEED
         same_dir = self._sign(vx) == self._sign(target_vx) or target_vx == 0
         need_decel = not same_dir and abs(vx) > 1e-5
 
+        # Apply Ground parameters; ground values are scaled by surface friction.
+        accel = ACCEL_GROUND * self.surface_friction if on_ground else ACCEL_AIR
+        decel = DECEL_GROUND * self.surface_friction if on_ground else DECEL_AIR
+        friction = (
+            FRICTION_GROUND * self.surface_friction if on_ground else FRICTION_AIR
+        )
+
         if input_dir != 0:
-            accel = ACCEL_GROUND if on_ground else ACCEL_AIR
             if need_decel:
-                decel = DECEL_GROUND if on_ground else DECEL_AIR
-                step = decel * dt
-                vx = self._approach(vx, 0.0, step)
-            step = accel * dt
-            vx = self._approach(vx, target_vx, step)
+                # Kill opposite momentum before accelerating toward the target speed.
+                vx = self._approach(vx, 0.0, decel * dt)
+            vx = self._approach(vx, target_vx, accel * dt)
         else:
-            # No input: apply friction toward 0
-            friction = FRICTION_GROUND if on_ground else FRICTION_AIR
-            vx = self._approach(vx, 0.0, dt * friction)
-        return vx
+            vx = self._approach(vx, 0.0, friction * dt)
+
+        return vx if abs(vx) <= MAX_SPEED else MAX_SPEED * self._sign(vx)
 
     def _set_direction(self, keys: pygame.key.ScancodeWrapper):
         self.input_dir = 0
@@ -94,6 +97,7 @@ class Player(Entity):
 
     def _record_drop_intent(self):
         self.drop_intent_timer = DROP_THROUGH_TIME
+        # Suppress buffered-jump consumption briefly and clear jump/ coyote to avoid accidental jumps.
         self.suppress_jump_timer = max(
             self.suppress_jump_timer, DROP_THROUGH_TIME * 0.5
         )
@@ -104,6 +108,7 @@ class Player(Entity):
         self.jump_buffer_timer = JUMP_BUFFER_TIME
 
     def _tick_timers(self, dt: float):
+        """Decrease input-intent timers each frame."""
         if self.jump_buffer_timer > 0:
             self.jump_buffer_timer = max(0.0, self.jump_buffer_timer - dt)
         if self.suppress_jump_timer > 0:
@@ -113,16 +118,17 @@ class Player(Entity):
 
     # --- Input (pre-physics) ---
     def handle_input(self, dt: float):
-        """Process input; acceleration-based horizontal; jump buffer; drop-through"""
+        """Process input: acceleration-based horizontal movement, jump buffering and drop-through intent."""
         keys = pygame.key.get_pressed()
 
         # --- Horizontal input handling ---
         self._set_direction(keys)
-        vx = self._next_velocity_x(self.vel.x, dt, self.input_dir, self.on_ground)
-        self.vel.x = self._clamp_to_max_speed(vx)
+        self.vel.x = self._next_velocity_x(
+            self.vel.x, dt, self.input_dir, self.on_ground
+        )
 
         # --- Jump / drop-through input handling ---
-        jump_down = keys[pygame.K_SPACE] or keys[pygame.K_UP]
+        jump_down = keys[pygame.K_SPACE] or keys[pygame.K_UP] or keys[pygame.K_w]
         down_held = keys[pygame.K_DOWN] or keys[pygame.K_s]
 
         if down_held and jump_down and not self._prev_jump_down:
@@ -136,7 +142,7 @@ class Player(Entity):
 
     # --- Post-physics (after collisions) ---
     def after_physics(self, dt: float):
-        """Coyote + buffered jump resolution after collisions."""
+        """Resolve coyote/jump/drop intents after collisions."""
         # Refresh coyote when grounded; tick down when airborne
         if self.on_ground:
             self.coyote_timer = COYOTE_TIME
@@ -144,7 +150,7 @@ class Player(Entity):
             if self.coyote_timer > 0:
                 self.coyote_timer = max(0.0, self.coyote_timer - dt)
 
-        # Consume drop-through intent when grounded: start ignoring one-way collisions
+        # Consume drop intent on a grounded frame and begin ignoring one-way platforms.
         if self.drop_intent_timer > 0.0 and self.on_ground:
             self.ignore_one_way_timer = DROP_THROUGH_TIME
             # Keep jump suppressed briefly so we don't immediately jump after dropping
@@ -152,7 +158,7 @@ class Player(Entity):
                 self.suppress_jump_timer, DROP_THROUGH_TIME * 0.5
             )
             self.drop_intent_timer = 0.0
-            # Nudge downward to cleanly leave the platform
+            # Nudge downward slightly to ensure separation from the platform.
             if self.vel.y < 30:
                 self.vel.y = 30
             return
@@ -191,7 +197,7 @@ class Player(Entity):
             if self.facing < 0:
                 img = pygame.transform.flip(img, True, False)
             dst = camera.apply(self.rect)
-            # Align sprite's bottom-center to collision box's bottom-center
+            # Align sprite's bottom-center to the collision box's bottom-center
             ir = img.get_rect(midbottom=dst.midbottom)
             surf.blit(img, ir)
 
