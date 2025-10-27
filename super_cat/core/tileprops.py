@@ -2,17 +2,17 @@
 
 # Tileset properties: load from JSON and expose helper accessors.
 
-import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
 
 @dataclass
 class TileProps:
-    # Minimal set; extend as needed (one_way, deadly, bounce, friction, etc.)
+    # Extendable per-tile properties
     solid: bool = False
     one_way: bool = False
     deadly: bool = False
+    spawn: bool = False
     friction: float = 1.0
 
 
@@ -28,12 +28,20 @@ class TilesetProps:
     def one_way_indices(self) -> set[int]:
         return {idx for idx, props in self.tiles.items() if props.one_way}
 
+    @property
+    def deadly_indices(self) -> set[int]:
+        return {idx for idx, props in self.tiles.items() if props.deadly}
+
+    @property
+    def spawn_indices(self) -> set[int]:
+        return {idx for idx, props in self.tiles.items() if props.spawn}
+
     def get(self, idx: int) -> TileProps:
         return self.tiles.get(idx, TileProps())
 
 
 def load_tileset_props(json_path: Path) -> TilesetProps:
-    """Load properties JSON. Format:
+    """Load properties JSON and merge with defaults.:
     {
       "default": { "solid": false, "friction": 1.0 },
       "tiles": {
@@ -43,6 +51,8 @@ def load_tileset_props(json_path: Path) -> TilesetProps:
       }
     }
     """
+    import json
+
     if not json_path.exists():
         return TilesetProps()
 

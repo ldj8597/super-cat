@@ -43,16 +43,22 @@ class Game:
             # Build solids (treat all non-negative indices as solid by default)
             self.solid_tiles = self.tilemap.solid_rects()
             self.one_way_tiles = self.tilemap.one_way_rects()
+            self.deadly_tiles = self.tilemap.deadly_rects()
+            self.spawns = self.tilemap.spawn_points()
         else:
             # Fallback: use built-in LEVEL string map
             self.tilemap = None
             self.solid_tiles = rects_from_level(LEVEL)
             self.one_way_tiles = []
+            self.deadly_tiles = []
+            self.spawns = []
             world_w = len(LEVEL[0]) * TILE
             world_h = len(LEVEL) * TILE
 
         # Entities
         self.player = Player((TILE * 3, TILE * 2))
+        if self.spawns:
+            self.player.rect.center = self.spawns[0]
         self.enemies = [Enemy((TILE * 14, TILE * 8), patrol_range=96)]
 
         # Camera
@@ -82,6 +88,14 @@ class Game:
             # --- Post-physics (coyote + jump buffer resolution) ---
             self.player.after_physics(dt)
 
+            # --- Deadly tile check ---
+            if self.player.rect.collidelist(self.deadly_tiles) != -1:
+                if self.spawns:
+                    self.player.rect.center = self.spawns[0]
+                else:
+                    self.player.rect.topleft = (TILE * 3, TILE * 2)
+                self.player.vel.update(0, 0)
+
             # --- Update surface friction for the next frame ---
             if self.tilemap and self.player.on_ground:
                 self.player.surface_friction = self.tilemap.friction_under(
@@ -102,8 +116,11 @@ class Game:
                         self.enemies.remove(en)
                     else:
                         # Simple respawn
-                        self.player.rect.topleft = (TILE * 3, TILE * 2)
-                        self.player.vel = pygame.Vector2(0, 0)
+                        if self.spawns:
+                            self.player.rect.center = self.spawns[0]
+                        else:
+                            self.player.rect.topleft = (TILE * 3, TILE * 2)
+                        self.player.vel.update(0, 0)
 
             # --- Camera ---
             self.camera.follow(self.player.rect)

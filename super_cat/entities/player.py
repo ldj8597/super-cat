@@ -60,7 +60,7 @@ class Player(Entity):
         prev_dir = self._sign(vx)
         need_decel = input_dir != 0 and prev_dir != input_dir and abs(vx) > 1e-5
 
-        # Apply Ground parameters; ground values are scaled by surface friction.
+        # Apply ground/air parameters; ground values are scaled by surface friction.
         accel = ACCEL_GROUND * self.surface_friction if on_ground else ACCEL_AIR
         decel = DECEL_GROUND * self.surface_friction if on_ground else DECEL_AIR
         friction = (

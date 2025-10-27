@@ -96,10 +96,32 @@ class TileMap:
         return build_rects_of_indices(self.grid, solid_indices, self.tile_w)
 
     def one_way_rects(self) -> list[pygame.Rect]:
-        one_way_indices = self.props.one_way_indices
-        if not one_way_indices:
+        indices = self.props.one_way_indices
+        if not indices:
             return []
-        return build_rects_of_indices(self.grid, one_way_indices, self.tile_w)
+        return build_rects_of_indices(self.grid, indices, self.tile_w)
+
+    def deadly_rects(self) -> list[pygame.Rect]:
+        """Rects for deadly tiles (AABB collision)."""
+        indices = self.props.deadly_indices
+        if not indices:
+            return []
+        return build_rects_of_indices(self.grid, indices, self.tile_w)
+
+    def spawn_points(self) -> list[tuple[int, int]]:
+        """Return world positions (pixel) for tiles marked as spawn."""
+        indices = self.props.spawn_indices
+        if not indices:
+            return []
+        pts: list[tuple[int, int]] = []
+        for y, row in enumerate(self.grid):
+            for x, idx in enumerate(row):
+                if idx in indices:
+                    # Use tile center as spawn
+                    cx = x * self.tile_w + self.tile_w // 2
+                    cy = y * self.tile_h + self.tile_h // 2
+                    pts.append((cx, cy))
+        return pts
 
     def draw(self, target: pygame.Surface, camera: Camera, empty_value: int = -1):
         # Draw cell-by-cell. For larger maps batch/diff drawing would be better.
@@ -129,9 +151,10 @@ class TileMap:
             return -1
 
     def friction_under(self, rect: pygame.FRect, empty_value: int = -1) -> float:
-        """Frictions under a rect's feet (average of overlapped tiles)"""
+        """Friction under a rect's feet (average of overlapped tiles)."""
         if not self.grid:
             return 1.0
+        # Sample 1px below the bottom edge so we are inside the tile we are standing on
         sample_y = int(rect.bottom) + 1
         row = sample_y // self.tile_h
         if row < 0 or row >= self.h:
@@ -145,12 +168,8 @@ class TileMap:
             for col in range(start_col, end_col + 1)
             if (idx := self.grid[row][col]) != empty_value
         ]
-        print(indices_under)
 
         frictions = [self.props.get(idx).friction for idx in indices_under]
         if not frictions:
             return 1.0
-        value = sum(frictions) / len(frictions)
-
-        # print(f"friction under the players feet: {value:.2f}")
-        return value
+        return sum(frictions) / len(frictions)
