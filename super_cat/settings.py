@@ -17,7 +17,7 @@ ACCEL_GROUND = 2800  # px/s^2 when holding left/right on ground
 DECEL_GROUND = 3200  # px/s^2 when changing direction on ground
 ACCEL_AIR = 900  # px/s^2 when holding left/right in air
 DECEL_AIR = 1600  # px/s^2 when changing direction in air
-FRICTION_GROUND = 2000  # px/s^2 when no input on ground
+FRICTION_GROUND = 1000  # px/s^2 when no input on ground
 FRICTION_AIR = 300  # px/s^2 when no input in air (tiny drift damp)
 
 

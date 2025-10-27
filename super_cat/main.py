@@ -53,8 +53,7 @@ class Game:
 
         # Entities
         self.player = Player((TILE * 3, TILE * 2))
-        self.enemies = []
-        # self.enemies = [Enemy((TILE * 14, TILE * 8), patrol_range=96)]
+        self.enemies = [Enemy((TILE * 14, TILE * 8), patrol_range=96)]
 
         # Camera
         self.camera = Camera(world_w, world_h)

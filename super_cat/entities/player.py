@@ -1,7 +1,7 @@
 # player.py
 
 import pygame
-
+from pygame import Vector2
 
 from .base import Entity
 from core.animation import (
@@ -51,23 +51,14 @@ class Player(Entity):
         # Load animations (fallback to placeholder if image missing)
         self._load_animations()
 
-    # --- Helpers ---
     @staticmethod
     def _sign(x: float) -> int:
         return (x > 0) - (x < 0)
 
-    @staticmethod
-    def _approach(current: float, target: float, delta: float) -> float:
-        """Move current toward target by at most delta (per call)."""
-        if current < target:
-            return min(current + delta, target)
-        else:
-            return max(current - delta, target)
-
     def _next_velocity_x(self, vx: float, dt: float, input_dir: int, on_ground: bool):
         target_vx = input_dir * MAX_SPEED
-        same_dir = self._sign(vx) == self._sign(target_vx) or target_vx == 0
-        need_decel = not same_dir and abs(vx) > 1e-5
+        prev_dir = self._sign(vx)
+        need_decel = input_dir != 0 and prev_dir != input_dir and abs(vx) > 1e-5
 
         # Apply Ground parameters; ground values are scaled by surface friction.
         accel = ACCEL_GROUND * self.surface_friction if on_ground else ACCEL_AIR
@@ -76,28 +67,25 @@ class Player(Entity):
             FRICTION_GROUND * self.surface_friction if on_ground else FRICTION_AIR
         )
 
+        next_vel = Vector2(vx, 0)
         if input_dir != 0:
             if need_decel:
                 # Kill opposite momentum before accelerating toward the target speed.
-                vx = self._approach(vx, 0.0, decel * dt)
-            vx = self._approach(vx, target_vx, accel * dt)
+                next_vel.move_towards_ip(Vector2(0.0, 0.0), decel * dt)
+
+            next_vel.move_towards_ip(Vector2(target_vx, 0.0), accel * dt)
         else:
-            vx = self._approach(vx, 0.0, friction * dt)
+            next_vel.move_towards_ip(Vector2(0.0, 0.0), friction * dt)
 
-        return vx if abs(vx) <= MAX_SPEED else MAX_SPEED * self._sign(vx)
+        assert next_vel.y == 0.0
+        next_vx = next_vel.x
+        next_dir = self._sign(next_vx)
 
-    def _set_direction(self, keys: pygame.key.ScancodeWrapper):
-        self.input_dir = 0
-        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-            self.input_dir -= 1
-        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-            self.input_dir += 1
-        if self.input_dir:
-            self.facing = 1 if self.input_dir > 0 else -1
+        return next_vx if abs(next_vx) <= MAX_SPEED else MAX_SPEED * next_dir
 
     def _record_drop_intent(self):
         self.drop_intent_timer = DROP_THROUGH_TIME
-        # Suppress buffered-jump consumption briefly and clear jump/ coyote to avoid accidental jumps.
+        # Suppress buffered-jump consumption briefly and clear jump/coyote to avoid accidental jumps.
         self.suppress_jump_timer = max(
             self.suppress_jump_timer, DROP_THROUGH_TIME * 0.5
         )
@@ -118,11 +106,17 @@ class Player(Entity):
 
     # --- Input (pre-physics) ---
     def handle_input(self, dt: float):
-        """Process input: acceleration-based horizontal movement, jump buffering and drop-through intent."""
+        """Process input: acceleration-based horizontal movement, jump buffering, and drop-through intent."""
         keys = pygame.key.get_pressed()
 
         # --- Horizontal input handling ---
-        self._set_direction(keys)
+        self.input_dir = 0
+        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+            self.input_dir -= 1
+        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+            self.input_dir += 1
+        if self.input_dir:
+            self.facing = 1 if self.input_dir > 0 else -1
         self.vel.x = self._next_velocity_x(
             self.vel.x, dt, self.input_dir, self.on_ground
         )
